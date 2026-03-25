@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # AutoResearch Agent - 自动化深度研究智能体
 
 基于LangGraph构建的自动化深度研究智能体，能够接收研究主题后自动执行信息搜索、分析、综合和报告生成全流程。
@@ -207,3 +208,7 @@ MIT License
 - [LangChain](https://github.com/langchain-ai/langchain)
 - [Tavily](https://tavily.com/)
 - [ChromaDB](https://www.trychroma.com/)
+=======
+# auto-agent
+自动深度研究智能体
+>>>>>>> 61b4a23c97f74ee7c89e20ca4397760f3d85bd2b
