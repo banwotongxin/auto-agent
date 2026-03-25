@@ -1,0 +1,76 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 虚拟环境
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# 数据库
+*.db
+*.sqlite
+*.sqlite3
+
+# 向量存储
+chroma_db/
+*.chroma
+
+# 日志
+*.log
+logs/
+
+# 测试覆盖率
+.coverage
+htmlcov/
+.tox/
+.pytest_cache/
+
+# 前端
+frontend/node_modules/
+frontend/dist/
+frontend/.cache/
+
+# 研究输出
+research_report_*.md
+*.pdf
+
+# 临时文件
+tmp/
+temp/
+*.tmp
+
+# 系统文件
+Thumbs.db
