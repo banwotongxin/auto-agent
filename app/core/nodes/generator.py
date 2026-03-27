@@ -266,7 +266,7 @@ class GeneratorNodeExecutor:
         return f"""请基于以下研究分析结果，生成一份专业的研究报告。
 
 # 研究主题
-{state["topic"]}
+{{topic}}
 
 # 研究深度级别
 {depth}（目标字数: {base_length}+ 字）

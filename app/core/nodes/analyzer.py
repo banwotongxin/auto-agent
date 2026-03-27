@@ -299,7 +299,7 @@ class AnalysisNodeExecutor:
             ]
             
             # 9. 识别共识和分歧
-            consensus, divergence = self.source_analyzer.extract_source_consensus(sources)
+            consensus, divergence = self.source_analyzer.extract_consensus_and_divergence(sources)
             
             # 10. 更新状态
             state["findings"] = enriched_findings
@@ -351,7 +351,7 @@ ANALYSIS_USER_TEMPLATE = """请分析以下研究资料，提取关键发现。
 
 {sources_text}
 
-请完成以下分析任务（共提取{ max_findings}个关键发现）：
+请完成以下分析任务（共提取{max_findings}个关键发现）：
 
 1. **提取关键发现**，每个发现必须包含：
    - topic: 发现主题/标题（简洁明确）

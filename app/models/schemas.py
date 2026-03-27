@@ -83,33 +83,47 @@ class QualityReport(BaseModel):
     improvement_suggestions: List[str] = Field(default_factory=list, description="改进建议")
 
 
+class TaskInfo(BaseModel):
+    """任务信息"""
+    task_id: str = Field(description="任务ID")
+    name: str = Field(description="任务名称")
+    status: str = Field(description="任务状态: pending/running/completed/failed")
+    progress: int = Field(default=0, description="任务进度 0-100")
+    result: Optional[str] = Field(default=None, description="任务结果")
+    error: Optional[str] = Field(default=None, description="错误信息")
+
+
 class ResearchRequest(BaseModel):
     """研究请求"""
     topic: str = Field(..., min_length=5, description="研究主题")
     depth: str = Field(
-        default="standard", 
+        default="standard",
         description="研究深度 (quick/standard/deep)"
     )
     custom_instructions: Optional[str] = Field(
-        default=None, 
+        default=None,
         description="自定义指令"
+    )
+    category: Optional[str] = Field(
+        default=None,
+        description="研究类别 (academic/news/general)"
     )
 
 
 class ResearchResponse(BaseModel):
     """研究响应"""
-    session_id: str = Field(description="会话ID")
-    status: str = Field(description="状态: initialized/running/completed/failed")
+    session_id: str = Field(description="会话ID (res_开头)")
+    status: str = Field(description="状态: pending/running/completed/failed")
     message: str = Field(description="响应消息")
 
 
 class ResearchStatus(BaseModel):
     """研究状态"""
     session_id: str = Field(description="会话ID")
-    status: str = Field(description="状态")
-    progress: int = Field(default=0, description="进度百分比 0-100")
-    stage: str = Field(description="当前阶段")
-    current_action: str = Field(description="当前操作描述")
+    status: str = Field(description="状态: pending/running/completed/failed")
+    percentage: int = Field(default=0, description="进度百分比 0-100")
+    text: str = Field(default="", description="当前操作描述")
+    tasks: List[TaskInfo] = Field(default_factory=list, description="任务列表")
     report: Optional[str] = Field(default=None, description="生成的研究报告")
     sources: Optional[List[Dict[str, Any]]] = Field(default=None, description="来源列表")
     findings: Optional[List[Dict[str, Any]]] = Field(default=None, description="研究发现列表")
