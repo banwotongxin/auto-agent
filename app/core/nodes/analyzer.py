@@ -7,6 +7,7 @@
 4. 评估每个发现的可信度
 5. 指出信息缺口和需要进一步验证的问题
 """
+import asyncio
 from typing import List, Dict, Any, Tuple
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
@@ -242,16 +243,25 @@ class AnalysisNodeExecutor:
             return state
         
         try:
-            # 1. 将来源存入向量存储（用于后续检索）
-            await self.vector_store.add_sources(
-                state["session_id"],
-                sources
-            )
-            
+            # 1. 将来源存入向量存储（用于后续检索，可选）
+            print(f"[Analyzer] 开始分析 {len(sources)} 个来源...")
+            try:
+                await asyncio.wait_for(
+                    self.vector_store.add_sources(state["session_id"], sources),
+                    timeout=30  # 最多等待30秒
+                )
+                print("[Analyzer] 向量存储完成")
+            except asyncio.TimeoutError:
+                print("[Analyzer] 向量存储超时，跳过")
+            except Exception as e:
+                print(f"[Analyzer] 向量存储失败，跳过: {str(e)[:100]}")
+
             # 2. 聚合来源统计
+            print("[Analyzer] 聚合来源统计...")
             source_stats = self.source_analyzer.aggregate_source_stats(sources)
             
             # 3. 准备分析输入
+            print("[Analyzer] 格式化来源数据...")
             sources_text = self._format_sources(sources[:20])  # 限制分析的来源数量
             
             # 4. 根据深度调整分析详细程度
@@ -262,28 +272,33 @@ class AnalysisNodeExecutor:
             else:
                 max_findings = 5
             
-            # 5. 构建提示
+            # 5. 构建提示（不使用 .format()，避免花括号冲突）
+            print("[Analyzer] 构建分析提示...")
             prompt = ChatPromptTemplate.from_messages([
                 ("system", ANALYSIS_SYSTEM_PROMPT),
-                ("human", ANALYSIS_USER_TEMPLATE.format(
-                    topic=state["topic"],
-                    source_count=len(sources),
-                    sources_text=sources_text,
-                    max_findings=max_findings
-                ))
+                ("human", ANALYSIS_USER_TEMPLATE)
             ])
             
             # 6. 执行分析
-            llm = get_llm(max_tokens=4000 if depth == "deep" else 3000)
-            chain = prompt | llm
-            
-            response = await chain.ainvoke({
-                "topic": state["topic"],
-                "source_count": len(sources),
-                "sources_text": sources_text
-            })
+            print(f"[Analyzer] 调用 LLM 进行深度分析 (max_tokens={4000 if depth == 'deep' else 3000})...")
+            try:
+                llm = get_llm(max_tokens=4000 if depth == "deep" else 3000)
+                chain = prompt | llm
+                
+                response = await chain.ainvoke({
+                    "topic": state["topic"],
+                    "source_count": str(len(sources)),
+                    "sources_text": sources_text,
+                    "max_findings": str(max_findings),
+                    "json_example": JSON_EXAMPLE
+                })
+                print(f"[Analyzer] LLM 分析完成，响应长度: {len(response.content)} 字符")
+            except Exception as e:
+                print(f"[Analyzer] LLM 调用失败: {str(e)}")
+                raise
             
             # 7. 解析结果
+            print("[Analyzer] 解析分析结果...")
             try:
                 parser = JsonOutputParser()
                 analysis_result = parser.parse(response.content)
@@ -311,6 +326,8 @@ class AnalysisNodeExecutor:
             state["information_gaps"] = analysis_result.get("information_gaps", [])
             state["controversial_points"] = analysis_result.get("controversial_points", [])
             state["stage"] = "generating"
+            
+            print(f"[Analyzer] 分析完成! 发现 {len(enriched_findings)} 个关键发现")
             
             # 11. 更新成本追踪
             cost_tracker = state.get("cost_tracker", {})
@@ -372,22 +389,12 @@ ANALYSIS_USER_TEMPLATE = """请分析以下研究资料，提取关键发现。
    - 300字以内的综合分析
 
 请以JSON格式返回：
-{{
-    "findings": [
-        {{
-            "topic": "发现主题",
-            "content": "详细内容",
-            "supporting_sources": ["url1", "url2"],
-            "confidence": 0.85
-        }}
-    ],
-    "key_themes": ["主题1", "主题2", "主题3"],
-    "controversial_points": ["争议点1", "争议点2"],
-    "information_gaps": ["缺口1", "缺口2"],
-    "summary": "整体分析摘要"
-}}
+{json_example}
 
 注意：只返回JSON，不要包含其他说明文字。"""
+
+# 双花括号转义，ChatPromptTemplate 会将 {{ 转为 {
+JSON_EXAMPLE = '{{"findings": [{{"topic": "发现主题", "content": "详细内容", "supporting_sources": ["url1", "url2"], "confidence": 0.85}}], "key_themes": ["主题1", "主题2", "主题3"], "controversial_points": ["争议点1", "争议点2"], "information_gaps": ["缺口1", "缺口2"], "summary": "整体分析摘要"}}'
 
 
 async def analyzing_node(state: ResearchState) -> ResearchState:

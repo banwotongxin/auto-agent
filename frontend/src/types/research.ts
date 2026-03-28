@@ -20,6 +20,10 @@ export interface SSEData {
   task_id?: number;
   summary?: string;
   message?: string;
+  report?: string;
+  sources?: any[];
+  findings?: any[];
+  cost_estimate?: number;
 }
 
 //启动研究接口的响应结构

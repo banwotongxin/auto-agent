@@ -1,5 +1,5 @@
 //通过SSE与后端通信并处理流式数据
-import { onUnmounted, ref } from "vue";
+import { computed, onUnmounted, ref } from "vue";
 import { marked } from "marked";
 import type {
   SSEData,
@@ -26,6 +26,8 @@ function createResearchStore() {
 
   // 轮询定时器（用于主动获取任务状态）
   let statusTimer: number | null = null;
+  // SSE 连接引用
+  let currentEventSource: EventSource | null = null;
 
   // 获取研究任务状态
   const fetchResearchStatus = async (session_id: string) => {
@@ -103,13 +105,17 @@ function createResearchStore() {
 
   //重置
   const resetState = () => {
-    stopStatusPoll()
+    stopStatusPoll();
     progressPercentage.value = 0;
     progressText.value = "连接中...";
     taskList.value = [];
     reportContent.value = "";
     errorMsg.value = "";
     currentSessionId.value = null;
+    if (currentEventSource) {
+      currentEventSource.close();
+      currentEventSource = null;
+    }
   };
 
   const startResearch = async (topic: string) => {
@@ -140,30 +146,31 @@ function createResearchStore() {
     
 
       //step2:用 session_id建立 SSE 连接
-      //SSE连接:new EventSource(...)官方内置的 SSE 连接对象;
-      //${encodeURIComponent(topic)}把中文 / 特殊字符转成安全的网址格式
       const es = new EventSource(`/research/${startData.session_id}/stream`);
+      currentEventSource = es;
 
       es.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data) as SSEData;
-          handleSSE(data);
+          handleSSE(data, es);
         } catch (err) {
           console.error("SSE数据解析失败", err);
         }
       };
 
-      es.onerror = (err) => {
-        console.error("SSE连接错误", err);
+      es.onerror = () => {
+        // 如果已经有报告或已完成，不显示连接错误（SSE 正常关闭）
+        if (reportContent.value || !isLoading.value) {
+          es.close();
+          currentEventSource = null;
+          return;
+        }
+        console.error("SSE连接错误");
         errorMsg.value = "连接断开，请重试";
         isLoading.value = false;
         es.close();
+        currentEventSource = null;
       };
-
-      // 研究完成或出错时自动关闭连接
-      es.addEventListener("close", () => {
-        es.close();
-      });
     } catch (err) {
       errorMsg.value = err instanceof Error ? err.message : "启动研究失败";
       isLoading.value = false;
@@ -171,7 +178,7 @@ function createResearchStore() {
   };
 
   //处理 SSE 数据
-  const handleSSE = (data: SSEData) => {
+  const handleSSE = (data: SSEData, es: EventSource) => {
     switch (data.type) {
       case "progress":
         progressText.value = data.text || "处理中...";
@@ -196,17 +203,22 @@ function createResearchStore() {
         break;
 
       case "completed":
+        // 从 completed 事件中保存报告
+        if (data.report) {
+          reportContent.value = data.report;
+        }
+        // 备用：如果 SSE 没有传 report，通过轮询获取
+        if (!reportContent.value && currentSessionId.value) {
+          fetchResearchStatus(currentSessionId.value);
+        }
         progressPercentage.value = 100;
         progressText.value = "✅ 研究全部完成";
         isLoading.value = false;
-        stopStatusPoll()
-        fetchHistory()
-        //自动关闭 SSE 连接
-        if (currentSessionId.value) {
-          const es = new EventSource(`/research/${currentSessionId.value}/stream`);
-          es.close();
-          currentSessionId.value = null;
-        }
+        stopStatusPoll();
+        fetchHistory();
+        // 关闭 SSE 连接
+        es.close();
+        currentSessionId.value = null;
         break;
 
       case "error":
@@ -220,20 +232,23 @@ function createResearchStore() {
   //关闭弹窗
   const closeModal = () => {
     isOpen.value = false;
-    //关闭弹窗时断开SSE连接
-    if (currentSessionId.value) {
-      const es = new EventSource(`/research/${currentSessionId.value}/stream`);
-      es.close();
-      currentSessionId.value = null;
+    if (currentEventSource) {
+      currentEventSource.close();
+      currentEventSource = null;
     }
-    stopStatusPoll()
+    currentSessionId.value = null;
+    stopStatusPoll();
   };
 
   // 页面销毁时停止定时器
   onUnmounted(() => stopStatusPoll())
   
-  //渲染Markdown
-  const renderedReport = () => marked.parse(reportContent.value, { gfm: true, breaks: true });
+  //渲染Markdown (使用 computed + 同步解析)
+  const renderedReport = computed(() => {
+    if (!reportContent.value) return "";
+    // 使用 marked.parse 的同步版本
+    return marked.parse(reportContent.value, { gfm: true, breaks: true }) as string;
+  });
 
   return {
     isOpen,

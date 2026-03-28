@@ -54,12 +54,16 @@ class LLMService:
             elif provider == "openai":
                 if not settings.OPENAI_API_KEY:
                     raise ValueError("OPENAI_API_KEY not configured")
-                    
+
+                # 检查是否配置了自定义API Base
+                api_base = getattr(settings, 'OPENAI_API_BASE', None)
+
                 cls._instances[cache_key] = ChatOpenAI(
                     model=model,
                     temperature=temperature,
                     max_tokens=max_tokens,
                     api_key=settings.OPENAI_API_KEY,
+                    base_url=api_base if api_base else None,
                 )
             else:
                 raise ValueError(f"Unsupported LLM provider: {provider}")

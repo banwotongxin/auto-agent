@@ -20,8 +20,13 @@ export default defineConfig({
     proxy:{
       '/api':{
         target:'http://localhost:8000',
-        changeOrigin:true,//将本地开发环境中的 /api 请求转发到后端服务器，并在转发前把路径中的 /api 去掉。
-        rewrite:(path)=>path.replace(/^\/api/,'')//将匹配到的 /api 替换为空字符串 ''
+        changeOrigin:true,
+        rewrite:(path)=>path.replace(/^\/api/,'')
+      },
+      '/research':{
+        target:'http://localhost:8000/api/v1',
+        changeOrigin:true,
+        rewrite:(path)=>path.replace(/^\/research/,'/research')
       }
     },
     port:5173,

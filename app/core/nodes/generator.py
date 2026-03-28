@@ -336,10 +336,13 @@ class GeneratorNodeExecutor:
             return state
         
         try:
+            print(f"[Generator] 开始生成研究报告...")
             depth = state.get("depth", "standard")
             config = REPORT_LENGTH_CONFIG.get(depth, REPORT_LENGTH_CONFIG["standard"])
+            print(f"[Generator] 研究深度: {depth}, 目标字数: {config['min_words']}-{config['max_words']}")
             
             # 准备上下文
+            print("[Generator] 准备报告上下文...")
             context = self._prepare_report_context(state)
             
             # 构建提示
@@ -349,6 +352,7 @@ class GeneratorNodeExecutor:
             ])
             
             # 执行生成
+            print(f"[Generator] 调用 LLM 生成报告 (max_tokens={config['min_words'] * 2})...")
             llm = get_llm(max_tokens=config["min_words"] * 2)
             chain = prompt | llm
             
@@ -360,6 +364,7 @@ class GeneratorNodeExecutor:
                 "discussion_text": context["discussion_text"],
                 "sources_text": context["sources_text"]
             })
+            print(f"[Generator] 报告生成完成，长度: {len(response.content)} 字符")
             
             # 更新状态
             state["final_report"] = response.content
@@ -367,6 +372,8 @@ class GeneratorNodeExecutor:
                 state["topic"], findings, depth
             )
             state["stage"] = "quality_check"
+            
+            print("[Generator] 报告已生成，进入质量检查阶段...")
             
             # 更新成本追踪
             cost_tracker = state.get("cost_tracker", {})

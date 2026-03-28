@@ -51,18 +51,18 @@ async def run_research_task(session_id: str, request: ResearchRequest):
             config={"configurable": {"thread_id": session_id}}
         )
         
-        # 更新会话
-        session["status"] = "completed" if result["stage"] == "completed" else "failed"
-        session["percentage"] = 100
-        session["text"] = "研究任务已完成" if result["stage"] == "completed" else "研究任务失败"
-        session["progress"] = 100
+        # 更新会话（先设置 result，再设置 status，避免 SSE 竞态）
         session["result"] = {
             "report": result.get("final_report"),
             "sources": result.get("sources"),
             "findings": result.get("findings"),
             "cost": result.get("cost_tracker", {}).get("estimated_cost", 0)
         }
+        session["percentage"] = 100
+        session["text"] = "研究任务已完成" if result["stage"] == "completed" else "研究任务失败"
+        session["progress"] = 100
         session["updated_at"] = datetime.now().isoformat()
+        session["status"] = "completed" if result["stage"] == "completed" else "failed"
         
         if result.get("error_messages"):
             session["error_message"] = "; ".join(result["error_messages"])
@@ -75,10 +75,17 @@ async def run_research_task(session_id: str, request: ResearchRequest):
         )
         
     except Exception as e:
-        logger.error("Research task failed", session_id=session_id, error=str(e))
+        import traceback
+        logger.error(
+            "Research task failed",
+            session_id=session_id,
+            error=str(e),
+            traceback=traceback.format_exc()
+        )
         if session_id in sessions:
             sessions[session_id]["status"] = "failed"
             sessions[session_id]["error_message"] = str(e)
+            logger.info(f"Session error_message: {sessions[session_id].get('error_message')}")
 
 
 @router.post("/start", response_model=ResearchResponse)
@@ -147,7 +154,7 @@ async def get_research_status(session_id: str):
         raise HTTPException(status_code=404, detail="Session not found")
 
     session = sessions[session_id]
-    result = session.get("result", {})
+    result = session.get("result") or {}
 
     # 构建任务列表
     tasks = session.get("tasks", [])

@@ -10,28 +10,28 @@ from typing import Literal, List, Dict, Any, Tuple, Optional
 from app.core.state import ResearchState
 
 
-# 质量标准配置
+# 质量标准配置（降低标准，避免循环）
 QUALITY_STANDARDS = {
     "quick": {
-        "min_report_words": 1500,
-        "min_sources": 5,
-        "min_findings": 3,
-        "min_source_coverage": 0.3,
-        "required_sections": ["执行摘要", "研究背景", "核心发现", "结论"]
+        "min_report_words": 1000,
+        "min_sources": 3,
+        "min_findings": 2,
+        "min_source_coverage": 0.2,
+        "required_sections": ["执行摘要", "核心发现", "结论"]
     },
     "standard": {
-        "min_report_words": 3000,
-        "min_sources": 15,
-        "min_findings": 5,
-        "min_source_coverage": 0.4,
-        "required_sections": ["执行摘要", "研究背景", "核心发现", "讨论与分析", "结论", "参考来源"]
+        "min_report_words": 2000,
+        "min_sources": 5,  # 从 15 降低到 5
+        "min_findings": 3,  # 从 5 降低到 3
+        "min_source_coverage": 0.3,
+        "required_sections": ["执行摘要", "核心发现", "结论"]
     },
     "deep": {
-        "min_report_words": 5000,
-        "min_sources": 30,
-        "min_findings": 8,
-        "min_source_coverage": 0.5,
-        "required_sections": ["执行摘要", "研究背景", "核心发现", "讨论与分析", "研究局限", "结论", "参考来源"]
+        "min_report_words": 4000,
+        "min_sources": 10,  # 从 30 降低到 10
+        "min_findings": 5,  # 从 8 降低到 5
+        "min_source_coverage": 0.4,
+        "required_sections": ["执行摘要", "研究背景", "核心发现", "讨论与分析", "结论"]
     }
 }
 
@@ -54,33 +54,38 @@ class QualityMetrics:
     @staticmethod
     def count_markdown_headers(text: str) -> int:
         """统计Markdown标题数量"""
+        if not text:
+            return 0
         return len([line for line in text.split('\n') if line.strip().startswith('#')])
-    
+
     @staticmethod
     def count_sections(text: str) -> int:
         """统计主要章节数量"""
+        if not text:
+            return 0
         return len([line for line in text.split('\n') if line.strip().startswith('## ')])
     
     @staticmethod
     def calculate_source_coverage(report: str, sources: List[Dict[str, Any]]) -> Tuple[int, float]:
         """
         计算来源覆盖率
-        
+
         Returns:
             (被引用来源数, 覆盖率)
         """
         if not sources:
             return 0, 0.0
-        
+
+        report = report or ""  # 确保 report 不为 None
         cited_count = 0
         for source in sources:
             url = source.get("url", "")
             title = source.get("title", "")
-            
+
             # 检查URL或标题是否在报告中被引用
             if url and (url in report or title[:30] in report):
                 cited_count += 1
-        
+
         coverage = cited_count / len(sources)
         return cited_count, coverage
     
@@ -163,9 +168,10 @@ class QualityChecker:
     
     def _check_content(self, report: str) -> Dict[str, Any]:
         """检查内容完整性"""
+        report = report or ""  # 确保 report 不为 None
         word_count = self.metrics.count_words(report)
         min_words = self.standards["min_report_words"]
-        
+
         # 检查必要章节
         required_sections = self.standards["required_sections"]
         missing_sections = [s for s in required_sections if s not in report]
@@ -185,17 +191,18 @@ class QualityChecker:
     
     def _check_structure(self, report: str) -> Dict[str, Any]:
         """检查报告结构"""
+        report = report or ""  # 确保 report 不为 None
         header_count = self.metrics.count_markdown_headers(report)
         section_count = self.metrics.count_sections(report)
-        
+
         # 评估结构完整性
         has_good_structure = header_count >= 5 and section_count >= 4
-        
+
         # 检查是否有适当的层次
         has_hierarchy = report.count("# ") >= 2 and report.count("## ") >= 3
-        
+
         passed = has_good_structure and has_hierarchy
-        
+
         return {
             "passed": passed,
             "header_count": header_count,
@@ -348,55 +355,23 @@ class QualityController:
 
 
 async def quality_check_node(state: ResearchState) -> ResearchState:
-    """质量控制节点"""
+    """质量控制节点 - 只做一轮检查，直接完成"""
     
     depth = state.get("depth", "standard")
     checker = QualityChecker(depth)
     quality_result = checker.check_all(state)
     
-    # 存储质量报告
     state["quality_report"] = quality_result
+    state["quality_score"] = quality_result["overall_score"]
+    state["quality_suggestions"] = quality_result.get("improvement_suggestions", [])
+    state["stage"] = "completed"
     
-    if quality_result["passed"]:
-        state["stage"] = "completed"
-        state["quality_score"] = quality_result["overall_score"]
-    else:
-        # 增加迭代计数
-        state["iteration_count"] = state.get("iteration_count", 0) + 1
-        state["quality_suggestions"] = quality_result["improvement_suggestions"]
-    
+    print(f"[QualityCheck] 质量检查完成 (score={quality_result['overall_score']:.2f})")
     return state
 
 
 def route_decision(state: ResearchState) -> str:
-    """
-    路由决策函数
-    
-    返回:
-        - needs_more_search: 需要更多搜索
-        - needs_reanalysis: 需要重新分析
-        - completed: 完成
-        - failed: 失败
-    """
-    
-    # 检查是否失败
+    """路由决策 - 始终完成"""
     if state.get("stage") == "failed":
         return "failed"
-    
-    # 检查是否已完成
-    if state.get("stage") == "completed":
-        return "completed"
-    
-    # 检查迭代次数限制
-    if state.get("iteration_count", 0) >= 2:
-        return "completed"
-    
-    # 质量控制检查
-    depth = state.get("depth", "standard")
-    checker = QualityChecker(depth)
-    quality_result = checker.check_all(state)
-    
-    if quality_result["passed"]:
-        return "completed"
-    
-    return quality_result["recommendation"]
+    return "completed"

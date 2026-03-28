@@ -95,7 +95,7 @@ class TaskInfo(BaseModel):
 
 class ResearchRequest(BaseModel):
     """研究请求"""
-    topic: str = Field(..., min_length=5, description="研究主题")
+    topic: str = Field(..., min_length=2, description="研究主题")
     depth: str = Field(
         default="standard",
         description="研究深度 (quick/standard/deep)"

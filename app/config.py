@@ -1,8 +1,13 @@
 """全局配置管理"""
+import os
 from functools import lru_cache
 from typing import List, Optional
 from pydantic_settings import BaseSettings
 from pydantic import Field
+from dotenv import load_dotenv
+
+# 加载 .env 文件中的环境变量
+load_dotenv()
 
 
 class Settings(BaseSettings):
@@ -31,6 +36,10 @@ class Settings(BaseSettings):
         default=None, 
         description="OpenAI API密钥"
     )
+    OPENAI_API_BASE: Optional[str] = Field(
+        default=None,
+        description="OpenAI API Base URL (用于自定义端点如DeepSeek)"
+    )
     DEFAULT_MODEL: str = Field(
         default="claude-3-sonnet-20240229",
         description="默认模型"
@@ -38,16 +47,15 @@ class Settings(BaseSettings):
     MAX_TOKENS: int = Field(default=4000, description="最大Token数")
     TEMPERATURE: float = Field(default=0.3, description="温度参数")
     
-    # 搜索配置
-    TAVILY_API_KEY: Optional[str] = Field(
-        default=None, 
-        description="Tavily API密钥"
+    # 搜索配置 - 支持 Serper/DuckDuckGo
+    SEARCH_PROVIDER: str = Field(default="serper", description="搜索提供商 (serper/duckduckgo)")
+    SERPER_API_KEY: Optional[str] = Field(
+        default=None,
+        description="Serper API Key（免费：https://serper.dev）"
     )
     MAX_SEARCH_RESULTS: int = Field(default=10, description="最大搜索结果数")
-    SEARCH_DEPTH: str = Field(
-        default="advanced", 
-        description="搜索深度 (basic/advanced)"
-    )
+    SEARCH_TIMEOUT: int = Field(default=30, description="搜索超时时间（秒）")
+    MAX_RETRIES: int = Field(default=2, description="搜索失败时的最大重试次数")
     
     # 网页解析配置
     FIRECRAWL_API_KEY: Optional[str] = Field(
